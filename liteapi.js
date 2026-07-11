@@ -5,7 +5,7 @@
 const API_KEY = 'prod_3a27a498-2b18-43a8-a91e-f3f241c889a7';
 const BASE_URL = 'https://api.liteapi.travel/v3.0';
 const WL_DOMAIN = 'luviaplace.com';
-const STAYO_ENGINE_URL = 'https://stayo-engine.onrender.com';
+const STAYO_ENGINE_URL = 'https://stayo-engine2.onrender.com';
 
 var allMarkers = [];
 var allHotelsData = [];
