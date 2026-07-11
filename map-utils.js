@@ -59,7 +59,18 @@ function addHotelMarkers(hotels) {
         marker.addTo(markersLayer);
     });
 }
+// Créer deux groupes : un pour zoom proche, un pour zoom éloigné
+var closeZoomGroup = L.layerGroup();
+var farZoomGroup = L.layerGroup();
 
+map.on('zoomend', function() {
+    var zoom = map.getZoom();
+    if (zoom <= 10) {
+        map.removeLayer(markersLayer);
+    } else {
+        map.addLayer(markersLayer);
+    }
+});
 // ========== GÉOLOC + ITINÉRAIRE ==========
 var userMarker = null;
 var userPosition = null;
