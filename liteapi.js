@@ -305,20 +305,50 @@ async function callEngine(query) {
         if (!r.ok) throw new Error('Engine error');
         var data = await r.json();
         var el = document.getElementById(loadingId); if (el) el.remove();
+
+        // Mettre à jour les paramètres depuis le contexte DeepSeek
+        if (data.context) {
+            if (data.context.checkin) currentSearchParams.checkin = data.context.checkin;
+            if (data.context.checkout) currentSearchParams.checkout = data.context.checkout;
+            if (data.context.adults) currentSearchParams.adults = data.context.adults;
+            if (data.context.currency) currentSearchParams.currency = data.context.currency;
+            ratesCache.clear();
+        }
+
+        // Afficher les infos du séjour
+        var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
+        var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + currentSearchParams.adults + ' adulte' + (currentSearchParams.adults > 1 ? 's' : '') + ' · ' + currentSearchParams.currency;
+
         if (data.hotels && data.hotels.length > 0) {
             var msg = '<p><strong>' + (data.message || "Voici mes recommandations :") + '</strong></p>';
+            msg += '<p style="font-size:11px;color:var(--text-light);">' + tripInfo + '</p>';
+
             var cardsHtml = data.hotels.slice(0, 3).map(function(h, i) {
                 var exp = data.explanations ? data.explanations[i] : null;
                 var confHtml = exp ? '<span style="font-size:10px;color:' + (exp.confidence >= 80 ? '#16a34a' : '#d97706') + ';">' + exp.confidence + '%</span>' : '';
-                return '<div class="ai-hotel-card" onclick="focusHotel(\'' + h.id + '\', ' + h.lat + ', ' + h.lng + ')"><h4>' + h.name + '</h4><div style="display:flex;justify-content:space-between;"><span>' + (h.rating||'?') + ' | ' + (h.distance_event_minutes||'?') + ' min</span><span class="price">' + (h.price||'?') + '€ ' + confHtml + '</span></div></div>';
+                return '<div class="ai-hotel-card" onclick="focusHotel(\'' + h.id + '\', ' + h.lat + ', ' + h.lng + ')"><h4>' + h.name + '</h4><div style="display:flex;justify-content:space-between;"><span>★' + (h.rating||'?') + ' | ' + (h.distance_event_minutes||'?') + ' min</span><span class="price">' + (h.price ? h.price + ' ' + currentSearchParams.currency : '?') + ' ' + confHtml + '</span></div></div>';
             }).join('');
             appendMessage('bot', msg + cardsHtml);
+
+            // Ajouter les activités suggérées
+            if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
+                var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees pour votre voyage ' + (data.context.type || '') + ' :</p><div class="ai-suggestions">' +
+                    data.context.suggested_activities.slice(0, 4).map(function(a) {
+                        return '<span class="ai-suggestion-chip" onclick="sendQuickReply(\'Activites ' + a + ' a ' + (data.context.event || '') + '\')">' + a + '</span>';
+                    }).join('') + '</div>';
+                appendMessage('bot', activitiesHtml);
+            }
+
             updateMapFromEngine(data.hotels);
-        } else { appendMessage('bot', "Aucun hotel trouve."); }
+        } else {
+            appendMessage('bot', data.message || "Aucun hotel trouve. Essayez de modifier vos dates ou votre budget.");
+        }
     } catch (e) {
         var el = document.getElementById(loadingId); if (el) el.remove();
-        appendMessage('bot', "Erreur de connexion au moteur.");
-    } finally { if (aiSendBtn) aiSendBtn.disabled = false; }
+        appendMessage('bot', "Le serveur se reveille (hebergement gratuit). Reessayez dans 30 secondes.");
+    } finally {
+        if (aiSendBtn) aiSendBtn.disabled = false;
+    }
     saveSearchToHistory(query);
 }
 
