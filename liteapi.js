@@ -283,6 +283,10 @@ async function callEngine(query) {
         });
         if (!r.ok) throw new Error('Engine error');
         var data = await r.json();
+        console.log('[STAYO] Réponse du backend:', data);
+console.log('[STAYO] Hotels:', data.hotels);
+console.log('[STAYO] Recommendations:', data.recommendations);
+console.log('[STAYO] Explanations:', data.explanations);
         var el = document.getElementById(loadingId);
         if (el) el.remove();
 
