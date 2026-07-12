@@ -502,10 +502,6 @@ function _hasDateInQuery(query) {
     return false;
 }
 
-// ============================================================
-// CORRECTION : Affichage dynamique du nombre de nuits et des participants
-// ============================================================
-
 async function callEngine(query) {
     if (!query) return;
     var aiSendBtn = document.getElementById('aiSendBtn');
@@ -530,27 +526,34 @@ async function callEngine(query) {
 
         var hasUserDates = _hasDateInQuery(query);
 
-        // Mettre à jour les paramètres depuis le contexte DeepSeek
+        // ✅ CRITIQUE : Mettre à jour currentSearchParams AVANT l'affichage
         if (data.context) {
-            if (data.context.checkin && !hasUserDates) {
+            // ✅ Mettre à jour les dates si l'utilisateur en a donné
+            if (data.context.checkin && data.context.checkin !== '') {
                 currentSearchParams.checkin = data.context.checkin;
+                console.log('[STAYO] Checkin mis à jour:', currentSearchParams.checkin);
             }
-            if (data.context.checkout && !hasUserDates) {
+            if (data.context.checkout && data.context.checkout !== '') {
                 currentSearchParams.checkout = data.context.checkout;
+                console.log('[STAYO] Checkout mis à jour:', currentSearchParams.checkout);
             }
-            if (data.context.adults) currentSearchParams.adults = data.context.adults;
-            if (data.context.currency) currentSearchParams.currency = data.context.currency;
+            if (data.context.adults) {
+                currentSearchParams.adults = data.context.adults;
+            }
+            if (data.context.currency) {
+                currentSearchParams.currency = data.context.currency;
+            }
+            // ✅ Vider le cache car les dates ont changé
             ratesCache.clear();
         }
 
-        // ✅ CORRECTION : Calcul dynamique du nombre de nuits
+        // ✅ CORRECTION : Calcul dynamique du nombre de nuits (maintenant avec les bonnes dates)
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         
-        // ✅ CORRECTION : Construction dynamique du message
+        // ✅ Construction dynamique du message
         var adults = currentSearchParams.adults || 2;
         var children = 0;
         
-        // ✅ Récupérer le nombre d'enfants depuis le contexte
         if (data.context && data.context.children) {
             children = data.context.children;
         }
@@ -592,12 +595,10 @@ async function callEngine(query) {
             }).join('');
             appendMessage('bot', msg + cardsHtml);
 
-            // Mettre à jour la carte
             if (data.hotels && data.hotels.length > 0) {
                 updateMapFromEngine(data.hotels);
             }
 
-            // Activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
                 var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees pour votre voyage ' +
                     (data.context.type || '') + ' :</p><div class="ai-suggestions">' +
