@@ -167,7 +167,7 @@ async function openHotelSidebar(hd) {
     var totalPrice = hd.price || null;
     var pricePerNight = totalPrice ? Math.round(totalPrice / nights) : null;
 
-    // ✅ CORRECTION ICI : hd.price au lieu de h.price
+    // ✅ CORRECTION : hd.price au lieu de h.price
     var priceDisplay = 'Prix non disponible';
     if (hd.price) {
         priceDisplay = hd.price + ' ' + cu;
