@@ -14,7 +14,7 @@ var currentSearchParams = {
     adults: 2,
     currency: 'EUR'
 };
-
+var ratesCache = new Map();
 // ========== HELPERS ==========
 function getDefaultDate(d) {
     var dt = new Date();
