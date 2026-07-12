@@ -106,33 +106,42 @@ async function fetchHotelDetails(id) {
     } catch (e) { return null; }
 }
 
+// ✅ FONCTION CORRIGÉE - Plus de référence à "h"
 async function openHotelSidebar(hd) {
-    var id = hd.id,
-        ci = currentSearchParams.checkin,
-        co = currentSearchParams.checkout;
-    var ad = currentSearchParams.adults,
-        cu = currentSearchParams.currency,
-        lang = 'fr';
+    // Vérifier que hd existe
+    if (!hd) {
+        console.error('openHotelSidebar: hd est undefined');
+        return;
+    }
+
+    var id = hd.id;
+    var ci = currentSearchParams.checkin;
+    var co = currentSearchParams.checkout;
+    var ad = currentSearchParams.adults;
+    var cu = currentSearchParams.currency;
+    var lang = 'fr';
+    
     openSidebar();
     sidebarContent.innerHTML = '<div class="sidebar-loading"><div class="spinner"></div><p>Chargement...</p></div>';
 
     var details = await fetchHotelDetails(id);
-    var sym = { 'EUR': '\u20AC', 'GBP': '\u00A3', 'USD': '$' },
-        symbol = sym[cu] || cu;
-    var mainImage = hd.thumbnail || null,
-        facilities = [],
-        facilitiesList = '',
-        hasMore = false;
-    var checkinTime = 'Non specifie',
-        checkoutTime = 'Non specifie',
-        checkinStart = '';
-    var stars = hd.stars || 0,
-        rating = hd.rating || null,
-        reviewCount = hd.reviewCount || 0;
+    var sym = { 'EUR': '\u20AC', 'GBP': '\u00A3', 'USD': '$' };
+    var symbol = sym[cu] || cu;
+    
+    var mainImage = hd.thumbnail || null;
+    var facilities = [];
+    var facilitiesList = '';
+    var hasMore = false;
+    var checkinTime = 'Non specifie';
+    var checkoutTime = 'Non specifie';
+    var checkinStart = '';
+    var stars = hd.stars || 0;
+    var rating = hd.rating || null;
+    var reviewCount = hd.reviewCount || 0;
     var cancellationHtml = '<p>Aucune information disponible.</p>';
-    var galleryHtml = '',
-        description = '',
-        importantInfo = '';
+    var galleryHtml = '';
+    var description = '';
+    var importantInfo = '';
     var addressText = [hd.address, hd.city, hd.country].filter(Boolean).join(', ') || 'Adresse non disponible';
 
     if (details) {
@@ -157,18 +166,14 @@ async function openHotelSidebar(hd) {
         addressText = [details.address, details.city, details.country].filter(Boolean).join(', ') || addressText;
     }
 
-    // ✅ Calcul du prix pour 1 nuit (prix total / nombre de nuits)
+    // ✅ Calcul du prix - TOUJOURS utiliser "hd" et jamais "h"
     var nights = Math.max(1, Math.round((new Date(co) - new Date(ci)) / 86400000));
     var totalPrice = hd.price || null;
     var pricePerNight = totalPrice ? Math.round(totalPrice / nights) : null;
 
-    // ✅ Affichage du prix par nuit (par défaut) et du prix total (en secondaire)
-    // ✅ CORRECTION: Utiliser hd au lieu de h
-    var priceDisplay = '?';
+    var priceDisplay = 'Prix non disponible';
     if (hd.price) {
-        priceDisplay = hd.price + ' ' + currentSearchParams.currency;
-    } else {
-        priceDisplay = 'Prix non disponible';
+        priceDisplay = hd.price + ' ' + cu;
     }
     var totalDisplay = totalPrice ? symbol + totalPrice.toLocaleString() : null;
 
@@ -204,8 +209,8 @@ async function openHotelSidebar(hd) {
         (bookingDeepLink ? '<a href="' + bookingDeepLink + '" target="_blank" rel="noopener" class="sidebar-book-btn secondary">Paiement direct</a>' : '') +
         '<div class="sidebar-section"><h3>Votre sejour</h3><div class="stay-summary"><div class="stay-dates"><span>' + ciFormatted + '</span><span class="stay-arrow">&rarr;</span><span>' + coFormatted + '</span></div><div class="stay-details"><span>' + nights + ' nuit' + (nights > 1 ? 's' : '') + '</span><span>&middot;</span><span>' + ad + ' adulte' + (ad > 1 ? 's' : '') + '</span></div></div></div>' +
         '<div class="sidebar-section"><h3>Detail du prix</h3><div class="price-breakdown">' +
-        '<div class="price-row"><span>Prix par nuit</span><span class="price-value">' + priceDisplay + '</span></div>' +
-        (totalDisplay ? '<div class="price-row"><span>Prix total (' + nights + ' nuits)</span><span class="price-value-secondary">' + totalDisplay + '</span></div>' : '') +
+        '<div class="price-row"><span>Prix total</span><span class="price-value">' + priceDisplay + '</span></div>' +
+        (pricePerNight ? '<div class="price-row"><span>Par nuit (' + nights + ' nuits)</span><span class="price-value-secondary">' + pricePerNight + ' ' + cu + '</span></div>' : '') +
         (hd.boardType ? '<div class="price-row"><span>Pension</span><span class="board-badge">' + hd.boardType + '</span></div>' : '') +
         '</div></div>' +
         (description ? '<div class="sidebar-section"><h3>Description</h3><div class="sidebar-description">' + description.substring(0, 500) + '...</div></div>' : '') +
@@ -465,6 +470,38 @@ function saveSearchToHistory(query) {
     localStorage.setItem('stayo_searches', JSON.stringify(searches));
 }
 
+// ✅ Détection des dates améliorée
+function _hasDateInQuery(query) {
+    if (!query) return false;
+    var q = query.toLowerCase();
+
+    var patterns = [
+        /du\s+\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+au\s+\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
+        /du\s+\d{1,2}\s+au\s+\d{1,2}/,
+        /du\s+\d{1,2}\s+\w+\s+au\s+\d{1,2}\s+\w+/,
+        /\d{1,2}[-–]\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
+        /\d{1,2}\s+au\s+\d{1,2}/,
+        /du\s+\d{1,2}\/\d{1,2}\s+au\s+\d{1,2}\/\d{1,2}/,
+        /\d{1,2}\/\d{1,2}\s*[-–]\s*\d{1,2}\/\d{1,2}/,
+        /\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
+        /du\s+\d{1,2}/
+    ];
+
+    for (var i = 0; i < patterns.length; i++) {
+        if (patterns[i].test(q)) {
+            console.log('[STAYO] Dates détectées dans la requête:', q);
+            return true;
+        }
+    }
+
+    if (/\d+\s+nuit/.test(q) || /\d+\s+nuits/.test(q)) {
+        console.log('[STAYO] Nombre de nuits détecté:', q);
+        return true;
+    }
+
+    return false;
+}
+
 async function callEngine(query) {
     if (!query) return;
     var aiSendBtn = document.getElementById('aiSendBtn');
@@ -487,10 +524,8 @@ async function callEngine(query) {
         var el = document.getElementById(loadingId);
         if (el) el.remove();
 
-        // ✅ Détecter si l'utilisateur a donné des dates dans sa requête
         var hasUserDates = _hasDateInQuery(query);
 
-        // Mettre à jour les paramètres depuis le contexte DeepSeek
         if (data.context) {
             if (data.context.checkin && !hasUserDates) {
                 currentSearchParams.checkin = data.context.checkin;
@@ -503,7 +538,6 @@ async function callEngine(query) {
             ratesCache.clear();
         }
 
-        // Calcul des nuits
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' +
             currentSearchParams.adults + ' adulte' + (currentSearchParams.adults > 1 ? 's' : '') +
@@ -559,40 +593,6 @@ async function callEngine(query) {
         if (aiSendBtn) aiSendBtn.disabled = false;
     }
     saveSearchToHistory(query);
-}
-
-// ============================================================
-// ✅ FONCTION : Détecte si l'utilisateur a donné des dates
-// ============================================================
-function _hasDateInQuery(query) {
-    if (!query) return false;
-    var q = query.toLowerCase();
-
-    var patterns = [
-        /du\s+\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+au\s+\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
-        /du\s+\d{1,2}\s+au\s+\d{1,2}/,
-        /du\s+\d{1,2}\s+\w+\s+au\s+\d{1,2}\s+\w+/,
-        /\d{1,2}[-–]\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
-        /\d{1,2}\s+au\s+\d{1,2}/,
-        /du\s+\d{1,2}\/\d{1,2}\s+au\s+\d{1,2}\/\d{1,2}/,
-        /\d{1,2}\/\d{1,2}\s*[-–]\s*\d{1,2}\/\d{1,2}/,
-        /\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)/,
-        /du\s+\d{1,2}/
-    ];
-
-    for (var i = 0; i < patterns.length; i++) {
-        if (patterns[i].test(q)) {
-            console.log('[STAYO] Dates détectées dans la requête:', q);
-            return true;
-        }
-    }
-
-    if (/\d+\s+nuit/.test(q) || /\d+\s+nuits/.test(q)) {
-        console.log('[STAYO] Nombre de nuits détecté:', q);
-        return true;
-    }
-
-    return false;
 }
 
 // ========== CHATBOT ==========
