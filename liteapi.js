@@ -283,29 +283,19 @@ async function callEngine(query) {
         });
         if (!r.ok) throw new Error('Engine error');
         var data = await r.json();
-        console.log('[STAYO] Réponse du backend:', data);
-console.log('[STAYO] Hotels:', data.hotels);
-console.log('[STAYO] Recommendations:', data.recommendations);
-console.log('[STAYO] Explanations:', data.explanations);
         var el = document.getElementById(loadingId);
         if (el) el.remove();
 
+        console.log('[STAYO] Réponse reçue:', data);
+
         var hasUserDates = _hasDateInQuery(query);
 
-        // ✅ Mise à jour des paramètres depuis la réponse
+        // Mise à jour des paramètres
         if (data.context) {
-            if (data.context.checkin && data.context.checkin !== '') {
-                currentSearchParams.checkin = data.context.checkin;
-            }
-            if (data.context.checkout && data.context.checkout !== '') {
-                currentSearchParams.checkout = data.context.checkout;
-            }
-            if (data.context.adults) {
-                currentSearchParams.adults = parseInt(data.context.adults, 10);
-            }
-            if (data.context.currency) {
-                currentSearchParams.currency = data.context.currency;
-            }
+            if (data.context.checkin) currentSearchParams.checkin = data.context.checkin;
+            if (data.context.checkout) currentSearchParams.checkout = data.context.checkout;
+            if (data.context.adults) currentSearchParams.adults = data.context.adults;
+            if (data.context.currency) currentSearchParams.currency = data.context.currency;
             ratesCache.clear();
         }
 
@@ -320,13 +310,21 @@ console.log('[STAYO] Explanations:', data.explanations);
         
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
 
+        // ✅ Récupérer les hôtels à afficher
         var hotelsToShow = data.recommendations || data.hotels || [];
 
+        console.log('[STAYO] Hôtels à afficher:', hotelsToShow.length);
+
         if (hotelsToShow.length > 0) {
+            // ✅ Afficher le message
             var msg = '<p><strong>' + (data.message || "Voici mes recommandations :") + '</strong></p>';
             msg += '<p style="font-size:11px;color:var(--text-light);background:rgba(0,0,0,0.05);padding:4px 8px;border-radius:4px;display:inline-block;">' + tripInfo + '</p>';
 
+            // ✅ Générer les cartes
             var cardsHtml = hotelsToShow.slice(0, 5).map(function(h, i) {
+                // ✅ LOG de chaque hôtel
+                console.log('[STAYO] Carte hôtel:', h.name, h.price);
+                
                 var exp = data.explanations && data.explanations[i] ? data.explanations[i] : null;
                 var confHtml = exp ? '<span style="font-size:10px;color:' +
                     (exp.confidence >= 80 ? '#16a34a' : '#d97706') + ';">' + exp.confidence + '%</span>' : '';
@@ -348,13 +346,22 @@ console.log('[STAYO] Explanations:', data.explanations);
                     '<span class="price">' + priceDisplay + ' ' + confHtml + '</span>' +
                     '</div></div>';
             }).join('');
+
+            console.log('[STAYO] Cartes HTML générées:', cardsHtml.length);
+
+            // ✅ Ajouter au chat
             appendMessage('bot', msg + cardsHtml);
 
-            // ✅ Mettre à jour la carte avec TOUS les hôtels (pas seulement les recommandations)
+            // ✅ Mettre à jour la carte
             if (data.hotels && data.hotels.length > 0) {
+                console.log('[STAYO] Mise à jour de la carte avec', data.hotels.length, 'hôtels');
                 updateMapFromEngine(data.hotels);
+            } else if (hotelsToShow.length > 0) {
+                console.log('[STAYO] Mise à jour de la carte avec', hotelsToShow.length, 'recommandations');
+                updateMapFromEngine(hotelsToShow);
             }
 
+            // ✅ Activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
                 var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees :</p><div class="ai-suggestions">' +
                     data.context.suggested_activities.slice(0, 4).map(function(a) {
@@ -364,9 +371,11 @@ console.log('[STAYO] Explanations:', data.explanations);
                 appendMessage('bot', activitiesHtml);
             }
         } else {
+            console.log('[STAYO] Aucun hôtel trouvé');
             appendMessage('bot', data.message || "Aucun hotel trouve. Essayez de modifier vos dates ou votre budget.");
         }
     } catch (e) {
+        console.error('[STAYO] Erreur:', e);
         var el = document.getElementById(loadingId);
         if (el) el.remove();
         appendMessage('bot', "Le serveur se reveille (hebergement gratuit). Reessayez dans 30 secondes.");
