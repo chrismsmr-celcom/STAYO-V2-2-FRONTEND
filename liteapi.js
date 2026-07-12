@@ -448,4 +448,8 @@ function saveSearchToHistory(query) {
 }
 
 // ========== INIT ==========
-setTimeout(loadHotelsForViewport, 500);
+setTimeout(function() {
+    console.log('🏨 STAYO prêt');
+    // Charger Paris par défaut
+    callEngine("Paris");
+}, 500);
