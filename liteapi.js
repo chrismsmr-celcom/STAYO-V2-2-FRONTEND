@@ -502,6 +502,10 @@ function _hasDateInQuery(query) {
     return false;
 }
 
+// ============================================================
+// CORRECTION : Affichage dynamique du nombre de nuits et des participants
+// ============================================================
+
 async function callEngine(query) {
     if (!query) return;
     var aiSendBtn = document.getElementById('aiSendBtn');
@@ -539,19 +543,31 @@ async function callEngine(query) {
             ratesCache.clear();
         }
 
-        // ✅ Utiliser data.recommendations (les vrais recommandations) ou data.hotels (fallback)
-        var hotelsToShow = data.recommendations || data.hotels || [];
-        
+        // ✅ CORRECTION : Calcul dynamique du nombre de nuits
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
-        var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' +
-            currentSearchParams.adults + ' adulte' + (currentSearchParams.adults > 1 ? 's' : '') +
-            ' · ' + currentSearchParams.currency;
+        
+        // ✅ CORRECTION : Construction dynamique du message
+        var adults = currentSearchParams.adults || 2;
+        var children = 0;
+        
+        // ✅ Récupérer le nombre d'enfants depuis le contexte
+        if (data.context && data.context.children) {
+            children = data.context.children;
+        }
+        
+        var participants = adults + ' adulte' + (adults > 1 ? 's' : '');
+        if (children > 0) {
+            participants += ' et ' + children + ' enfant' + (children > 1 ? 's' : '');
+        }
+        
+        var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
 
-        if (hotelsToShow.length > 0) {
+        if (data.hotels && data.hotels.length > 0) {
             var msg = '<p><strong>' + (data.message || "Voici mes recommandations :") + '</strong></p>';
             msg += '<p style="font-size:11px;color:var(--text-light);">' + tripInfo + '</p>';
 
-            // ✅ Afficher jusqu'à 5 recommandations
+            var hotelsToShow = data.recommendations || data.hotels || [];
+            
             var cardsHtml = hotelsToShow.slice(0, 5).map(function(h, i) {
                 var exp = data.explanations && data.explanations[i] ? data.explanations[i] : null;
                 var confHtml = exp ? '<span style="font-size:10px;color:' +
@@ -576,14 +592,12 @@ async function callEngine(query) {
             }).join('');
             appendMessage('bot', msg + cardsHtml);
 
-            // Mettre à jour la carte avec TOUS les hôtels (pas seulement les recommandations)
+            // Mettre à jour la carte
             if (data.hotels && data.hotels.length > 0) {
                 updateMapFromEngine(data.hotels);
-            } else if (hotelsToShow.length > 0) {
-                updateMapFromEngine(hotelsToShow);
             }
 
-            // Ajouter les activités suggérées
+            // Activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
                 var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees pour votre voyage ' +
                     (data.context.type || '') + ' :</p><div class="ai-suggestions">' +
