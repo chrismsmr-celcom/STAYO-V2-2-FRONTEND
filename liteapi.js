@@ -526,6 +526,7 @@ async function callEngine(query) {
 
         var hasUserDates = _hasDateInQuery(query);
 
+        // Mettre à jour les paramètres depuis le contexte DeepSeek
         if (data.context) {
             if (data.context.checkin && !hasUserDates) {
                 currentSearchParams.checkin = data.context.checkin;
@@ -538,17 +539,21 @@ async function callEngine(query) {
             ratesCache.clear();
         }
 
+        // ✅ Utiliser data.recommendations (les vrais recommandations) ou data.hotels (fallback)
+        var hotelsToShow = data.recommendations || data.hotels || [];
+        
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' +
             currentSearchParams.adults + ' adulte' + (currentSearchParams.adults > 1 ? 's' : '') +
             ' · ' + currentSearchParams.currency;
 
-        if (data.hotels && data.hotels.length > 0) {
+        if (hotelsToShow.length > 0) {
             var msg = '<p><strong>' + (data.message || "Voici mes recommandations :") + '</strong></p>';
             msg += '<p style="font-size:11px;color:var(--text-light);">' + tripInfo + '</p>';
 
-            var cardsHtml = data.hotels.slice(0, 3).map(function(h, i) {
-                var exp = data.explanations ? data.explanations[i] : null;
+            // ✅ Afficher jusqu'à 5 recommandations
+            var cardsHtml = hotelsToShow.slice(0, 5).map(function(h, i) {
+                var exp = data.explanations && data.explanations[i] ? data.explanations[i] : null;
                 var confHtml = exp ? '<span style="font-size:10px;color:' +
                     (exp.confidence >= 80 ? '#16a34a' : '#d97706') + ';">' + exp.confidence + '%</span>' : '';
 
@@ -571,6 +576,14 @@ async function callEngine(query) {
             }).join('');
             appendMessage('bot', msg + cardsHtml);
 
+            // Mettre à jour la carte avec TOUS les hôtels (pas seulement les recommandations)
+            if (data.hotels && data.hotels.length > 0) {
+                updateMapFromEngine(data.hotels);
+            } else if (hotelsToShow.length > 0) {
+                updateMapFromEngine(hotelsToShow);
+            }
+
+            // Ajouter les activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
                 var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees pour votre voyage ' +
                     (data.context.type || '') + ' :</p><div class="ai-suggestions">' +
@@ -580,8 +593,6 @@ async function callEngine(query) {
                     }).join('') + '</div>';
                 appendMessage('bot', activitiesHtml);
             }
-
-            updateMapFromEngine(data.hotels);
         } else {
             appendMessage('bot', data.message || "Aucun hotel trouve. Essayez de modifier vos dates ou votre budget.");
         }
