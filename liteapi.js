@@ -150,7 +150,13 @@ async function openHotelSidebar(hd) {
     var pricePerNight = totalPrice ? Math.round(totalPrice / nights) : null;
     
     // ✅ Affichage du prix par nuit (par défaut) et du prix total (en secondaire)
-    var priceDisplay = pricePerNight ? symbol + pricePerNight.toLocaleString() + '/nuit' : 'Prix non disponible';
+    var priceDisplay = '?';
+if (h.price) {
+    priceDisplay = h.price + ' ' + currentSearchParams.currency;
+} else {
+    // ✅ Message plus explicite
+    priceDisplay = 'Budget trop bas';
+}
     var totalDisplay = totalPrice ? symbol + totalPrice.toLocaleString() : null;
     
     var hotelDeepLink = buildHotelDeepLink(id, ci, co, ad, cu, lang);
