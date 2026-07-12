@@ -512,15 +512,33 @@ async function callEngine(query) {
 
         var hasUserDates = _hasDateInQuery(query);
 
+        // ✅ Mise à jour des paramètres depuis la réponse
         if (data.context) {
-            if (data.context.checkin && !hasUserDates) currentSearchParams.checkin = data.context.checkin;
-            if (data.context.checkout && !hasUserDates) currentSearchParams.checkout = data.context.checkout;
-            if (data.context.adults) currentSearchParams.adults = data.context.adults;
-            if (data.context.currency) currentSearchParams.currency = data.context.currency;
+            // ✅ Dates
+            if (data.context.checkin && data.context.checkin !== '') {
+                currentSearchParams.checkin = data.context.checkin;
+            }
+            if (data.context.checkout && data.context.checkout !== '') {
+                currentSearchParams.checkout = data.context.checkout;
+            }
+            // ✅ Adultes
+            if (data.context.adults) {
+                currentSearchParams.adults = parseInt(data.context.adults, 10);
+            }
+            // ✅ Enfants (stockés pour l'affichage)
+            if (data.context.children !== undefined) {
+                data._children = parseInt(data.context.children, 10);
+            }
+            if (data.context.currency) {
+                currentSearchParams.currency = data.context.currency;
+            }
             ratesCache.clear();
         }
 
+        // ✅ Calcul du nombre de nuits
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
+        
+        // ✅ Construction du message des participants
         var adults = currentSearchParams.adults || 2;
         var children = (data.context && data.context.children) ? parseInt(data.context.children, 10) : 0;
         
@@ -529,6 +547,7 @@ async function callEngine(query) {
             participants += ' et ' + children + ' enfant' + (children > 1 ? 's' : '');
         }
         
+        // ✅ Construction de l'en-tête
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
 
         var hotelsToShow = data.recommendations || data.hotels || [];
@@ -544,9 +563,11 @@ async function callEngine(query) {
 
                 var priceDisplay = '?';
                 if (h.price) {
+                    // ✅ Si l'utilisateur a donné des dates → afficher le prix TOTAL
                     if (hasUserDates) {
                         priceDisplay = h.price + ' ' + currentSearchParams.currency;
                     } else {
+                        // ✅ Sinon → afficher le prix PAR NUIT
                         var pricePerNight = Math.round(h.price / nights);
                         priceDisplay = pricePerNight + ' ' + currentSearchParams.currency + '/nuit';
                     }
@@ -561,10 +582,12 @@ async function callEngine(query) {
             }).join('');
             appendMessage('bot', msg + cardsHtml);
 
+            // ✅ Mettre à jour la carte avec tous les hôtels
             if (data.hotels && data.hotels.length > 0) {
                 updateMapFromEngine(data.hotels);
             }
 
+            // ✅ Activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
                 var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees :</p><div class="ai-suggestions">' +
                     data.context.suggested_activities.slice(0, 4).map(function(a) {
