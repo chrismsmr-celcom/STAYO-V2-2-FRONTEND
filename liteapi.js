@@ -1,5 +1,5 @@
 // ==========================
-// liteapi.js - STAYO Leaflet Final
+// liteapi.js - STAYO Leaflet Final - CORRIGÉ
 // ==========================
 
 const API_KEY = 'prod_3a27a498-2b18-43a8-a91e-f3f241c889a7';
@@ -13,7 +13,6 @@ var updateTimeout = null;
 var currentRequestId = 0;
 var activeController = null;
 
-// ✅ Paramètres de recherche avec prix par défaut (1 nuit aujourd'hui)
 var currentSearchParams = {
     checkin: getDefaultDate(0),
     checkout: getDefaultDate(1),
@@ -25,7 +24,6 @@ var CACHE_TTL_MS = 15 * 60 * 1000;
 var ratesCache = new Map();
 var markersLayer = L.layerGroup().addTo(map);
 
-// ========== HELPERS ==========
 function getDefaultDate(d) {
     var dt = new Date();
     dt.setDate(dt.getDate() + d);
@@ -40,7 +38,6 @@ function openGetYourGuide(lat, lng, city) {
     window.open('https://www.getyourguide.fr/s/?q=' + encodeURIComponent(city || 'activites') + '&partner_id=TNCQUZX&cmp=share_to_earn&lat=' + lat + '&lng=' + lng, '_blank');
 }
 
-// ========== SIDEBAR ==========
 var sidebar = document.getElementById('hotelSidebar');
 var sidebarOverlay = document.getElementById('sidebarOverlay');
 var sidebarContent = document.getElementById('sidebarContent');
@@ -69,7 +66,6 @@ function closeSidebar() {
 sidebarOverlay.addEventListener('click', closeSidebar);
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeSidebar(); });
 
-// ========== DEEP LINK ==========
 function buildHotelDeepLink(id, ci, co, ad, cu, lang) {
     var occ = btoa(JSON.stringify([{ adults: ad, children: [] }]));
     var p = new URLSearchParams();
@@ -106,9 +102,10 @@ async function fetchHotelDetails(id) {
     } catch (e) { return null; }
 }
 
-// ✅ FONCTION CORRIGÉE - Plus de référence à "h"
+// ============================================================
+// ✅ FONCTION CORRIGÉE - h remplacé par hd
+// ============================================================
 async function openHotelSidebar(hd) {
-    // Vérifier que hd existe
     if (!hd) {
         console.error('openHotelSidebar: hd est undefined');
         return;
@@ -166,12 +163,11 @@ async function openHotelSidebar(hd) {
         addressText = [details.address, details.city, details.country].filter(Boolean).join(', ') || addressText;
     }
 
-    // ✅ Calcul du prix - TOUJOURS utiliser "hd" et jamais "h"
     var nights = Math.max(1, Math.round((new Date(co) - new Date(ci)) / 86400000));
     var totalPrice = hd.price || null;
     var pricePerNight = totalPrice ? Math.round(totalPrice / nights) : null;
 
-    // ✅ CORRECTION: Utiliser hd au lieu de h
+    // ✅ CORRECTION ICI : hd.price au lieu de h.price
     var priceDisplay = 'Prix non disponible';
     if (hd.price) {
         priceDisplay = hd.price + ' ' + cu;
@@ -468,7 +464,6 @@ function saveSearchToHistory(query) {
     localStorage.setItem('stayo_searches', JSON.stringify(searches));
 }
 
-// ✅ Détection des dates améliorée
 function _hasDateInQuery(query) {
     if (!query) return false;
     var q = query.toLowerCase();
@@ -486,23 +481,12 @@ function _hasDateInQuery(query) {
     ];
 
     for (var i = 0; i < patterns.length; i++) {
-        if (patterns[i].test(q)) {
-            console.log('[STAYO] Dates détectées dans la requête:', q);
-            return true;
-        }
+        if (patterns[i].test(q)) return true;
     }
 
-    if (/\d+\s+nuit/.test(q) || /\d+\s+nuits/.test(q)) {
-        console.log('[STAYO] Nombre de nuits détecté:', q);
-        return true;
-    }
-
+    if (/\d+\s+nuit/.test(q) || /\d+\s+nuits/.test(q)) return true;
     return false;
 }
-
-// ============================================================
-// CORRECTION : Affichage dynamique du nombre de nuits et des participants
-// ============================================================
 
 async function callEngine(query) {
     if (!query) return;
@@ -528,30 +512,17 @@ async function callEngine(query) {
 
         var hasUserDates = _hasDateInQuery(query);
 
-        // Mettre à jour les paramètres depuis le contexte DeepSeek
         if (data.context) {
-            if (data.context.checkin && !hasUserDates) {
-                currentSearchParams.checkin = data.context.checkin;
-            }
-            if (data.context.checkout && !hasUserDates) {
-                currentSearchParams.checkout = data.context.checkout;
-            }
+            if (data.context.checkin && !hasUserDates) currentSearchParams.checkin = data.context.checkin;
+            if (data.context.checkout && !hasUserDates) currentSearchParams.checkout = data.context.checkout;
             if (data.context.adults) currentSearchParams.adults = data.context.adults;
             if (data.context.currency) currentSearchParams.currency = data.context.currency;
             ratesCache.clear();
         }
 
-        // ✅ CORRECTION : Calcul dynamique du nombre de nuits
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
-        
-        // ✅ CORRECTION : Construction dynamique du message
         var adults = currentSearchParams.adults || 2;
-        var children = 0;
-        
-        // ✅ Récupérer le nombre d'enfants depuis le contexte
-        if (data.context && data.context.children) {
-            children = data.context.children;
-        }
+        var children = (data.context && data.context.children) ? parseInt(data.context.children, 10) : 0;
         
         var participants = adults + ' adulte' + (adults > 1 ? 's' : '');
         if (children > 0) {
@@ -560,7 +531,6 @@ async function callEngine(query) {
         
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
 
-        // ✅ Utiliser data.recommendations (les vrais recommandations) ou data.hotels (fallback)
         var hotelsToShow = data.recommendations || data.hotels || [];
 
         if (hotelsToShow.length > 0) {
@@ -591,17 +561,12 @@ async function callEngine(query) {
             }).join('');
             appendMessage('bot', msg + cardsHtml);
 
-            // Mettre à jour la carte avec TOUS les hôtels
             if (data.hotels && data.hotels.length > 0) {
                 updateMapFromEngine(data.hotels);
-            } else if (hotelsToShow.length > 0) {
-                updateMapFromEngine(hotelsToShow);
             }
 
-            // Activités suggérées
             if (data.context && data.context.suggested_activities && data.context.suggested_activities.length > 0) {
-                var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees pour votre voyage ' +
-                    (data.context.type || '') + ' :</p><div class="ai-suggestions">' +
+                var activitiesHtml = '<p style="margin-top:8px;font-size:12px;">Activites suggerees :</p><div class="ai-suggestions">' +
                     data.context.suggested_activities.slice(0, 4).map(function(a) {
                         return '<span class="ai-suggestion-chip" onclick="sendQuickReply(\'Activites ' +
                             a + ' a ' + (data.context.event || '') + '\')">' + a + '</span>';
