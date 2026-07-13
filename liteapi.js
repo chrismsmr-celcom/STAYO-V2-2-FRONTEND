@@ -24,6 +24,35 @@ var CACHE_TTL_MS = 15 * 60 * 1000;
 var ratesCache = new Map();
 var markersLayer = L.layerGroup().addTo(map);
 
+// ==========================
+// FONCTIONS DE SAUVEGARDE
+// ==========================
+function saveSearchParams() {
+    var params = {
+        checkin: currentSearchParams.checkin,
+        checkout: currentSearchParams.checkout,
+        adults: currentSearchParams.adults,
+        currency: currentSearchParams.currency
+    };
+    localStorage.setItem('stayo_search_params', JSON.stringify(params));
+}
+
+function loadSearchParams() {
+    var saved = localStorage.getItem('stayo_search_params');
+    if (saved) {
+        try {
+            var params = JSON.parse(saved);
+            if (params.checkin) currentSearchParams.checkin = params.checkin;
+            if (params.checkout) currentSearchParams.checkout = params.checkout;
+            if (params.adults) currentSearchParams.adults = params.adults;
+            if (params.currency) currentSearchParams.currency = params.currency;
+        } catch(e) {}
+    }
+}
+
+// ==========================
+// FONCTIONS UTILES
+// ==========================
 function getDefaultDate(d) {
     var dt = new Date();
     dt.setDate(dt.getDate() + d);
@@ -38,6 +67,9 @@ function openGetYourGuide(lat, lng, city) {
     window.open('https://www.getyourguide.fr/s/?q=' + encodeURIComponent(city || 'activites') + '&partner_id=TNCQUZX&cmp=share_to_earn&lat=' + lat + '&lng=' + lng, '_blank');
 }
 
+// ==========================
+// SIDEBAR
+// ==========================
 var sidebar = document.getElementById('hotelSidebar');
 var sidebarOverlay = document.getElementById('sidebarOverlay');
 var sidebarContent = document.getElementById('sidebarContent');
@@ -216,7 +248,9 @@ async function openHotelSidebar(hd) {
         '</div>';
 }
 
-// ========== API ==========
+// ==========================
+// API - MARQUEURS ET CARTE
+// ==========================
 function clearAllMarkers() {
     markersLayer.clearLayers();
     allHotelsData = [];
@@ -460,6 +494,9 @@ function saveSearchToHistory(query) {
     localStorage.setItem('stayo_searches', JSON.stringify(searches));
 }
 
+// ==========================
+// EXTRACTION DES DONNÉES DE LA REQUÊTE
+// ==========================
 function _hasDateInQuery(query) {
     if (!query) return false;
     var q = query.toLowerCase();
@@ -484,20 +521,43 @@ function _hasDateInQuery(query) {
     return false;
 }
 
-// ✅ Fonction améliorée pour extraire le nombre d'adultes depuis la requête
 function extractAdultsFromQuery(query) {
     if (!query) return null;
-    var match = query.match(/(\d+)\s*(adulte|adultes|pers|personnes|voyageurs?|adult)/i);
-    if (match) return parseInt(match[1], 10);
     
-    // Cherche aussi "pour X personnes"
+    // "04 adultes", "4 adultes", "4 personnes", "4 pers"
+    var match = query.match(/(\d+)\s*(adulte|adultes|pers|personnes|voyageurs?|adult)/i);
+    if (match) {
+        var num = parseInt(match[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    
+    // "pour 4 personnes"
     var match2 = query.match(/pour\s+(\d+)\s+(personnes?|pers)/i);
-    if (match2) return parseInt(match2[1], 10);
+    if (match2) {
+        var num = parseInt(match2[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    
+    // "4 pax"
+    var match3 = query.match(/(\d+)\s*pax/i);
+    if (match3) {
+        var num = parseInt(match3[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
     
     return null;
 }
 
-// ✅ Fonction améliorée pour extraire la devise depuis la requête
+function extractChildrenFromQuery(query) {
+    if (!query) return null;
+    var match = query.match(/(\d+)\s*(enfant|enfants|child|children)/i);
+    if (match) {
+        var num = parseInt(match[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    return null;
+}
+
 function extractCurrencyFromQuery(query) {
     if (!query) return null;
     if (/euros?|eur/i.test(query)) return 'EUR';
@@ -506,14 +566,20 @@ function extractCurrencyFromQuery(query) {
     return null;
 }
 
-// ✅ Fonction pour normaliser les dates extraites de la requête
+function extractNightsFromQuery(query) {
+    if (!query) return null;
+    var match = query.match(/(\d+)\s*(nuit|nuits)/i);
+    if (match) return parseInt(match[1], 10);
+    return null;
+}
+
 function extractDatesFromQuery(query) {
     if (!query) return null;
     
     var now = new Date();
     var currentYear = now.getFullYear();
     
-    // ✅ FORMAT 1: "du 14 juillet au 25 juillet 2026"
+    // FORMAT 1: "du 14 juillet au 25 juillet 2026"
     var match = query.match(/du\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
     if (match) {
         var monthMap = {
@@ -532,7 +598,6 @@ function extractDatesFromQuery(query) {
         var date1 = new Date(year1, month1, day1);
         var date2 = new Date(year2, month2, day2);
         
-        // ✅ Si la date est passée, on prend l'année suivante
         if (date1 < now) date1.setFullYear(date1.getFullYear() + 1);
         if (date2 < now) date2.setFullYear(date2.getFullYear() + 1);
         if (date1 >= date2) date2.setFullYear(date2.getFullYear() + 1);
@@ -543,7 +608,7 @@ function extractDatesFromQuery(query) {
         };
     }
     
-    // ✅ FORMAT 2: "14 juillet au 25 juillet 2026" (sans "du")
+    // FORMAT 2: "14 juillet au 25 juillet 2026" (sans "du")
     var match2 = query.match(/(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
     if (match2) {
         var monthMap = {
@@ -572,7 +637,7 @@ function extractDatesFromQuery(query) {
         };
     }
     
-    // ✅ FORMAT 3: "14/07/2026 au 25/07/2026"
+    // FORMAT 3: "14/07/2026 au 25/07/2026"
     var match3 = query.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s+au\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
     if (match3) {
         var day1 = parseInt(match3[1]);
@@ -596,7 +661,7 @@ function extractDatesFromQuery(query) {
         };
     }
     
-    // ✅ FORMAT 4: "14-25 juillet 2026"
+    // FORMAT 4: "14-25 juillet 2026"
     var match4 = query.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
     if (match4) {
         var monthMap = {
@@ -624,14 +689,9 @@ function extractDatesFromQuery(query) {
     return null;
 }
 
-// ✅ Fonction pour extraire le nombre de nuits depuis la requête
-function extractNightsFromQuery(query) {
-    if (!query) return null;
-    var match = query.match(/(\d+)\s*(nuit|nuits)/i);
-    if (match) return parseInt(match[1], 10);
-    return null;
-}
-
+// ==========================
+// MOTEUR PRINCIPAL
+// ==========================
 async function callEngine(query) {
     console.log('🔍 callEngine - Début');
     console.log('📝 Query:', query);
@@ -647,15 +707,16 @@ async function callEngine(query) {
     var loadingId = appendMessage('bot', '<div class="spinner" style="width:20px;height:20px;margin:10px;"></div>');
     
     try {
-        // ✅ 1. EXTRAIRE LES DONNÉES DE LA REQUÊTE (AVANT L'APPEL API)
+        // 1. EXTRAIRE LES DONNÉES DE LA REQUÊTE
         var extractedDates = extractDatesFromQuery(query);
         var extractedAdults = extractAdultsFromQuery(query);
         var extractedCurrency = extractCurrencyFromQuery(query);
         var extractedNights = extractNightsFromQuery(query);
+        var extractedChildren = extractChildrenFromQuery(query);
         
-        console.log('📦 Données extraites:', { extractedDates, extractedAdults, extractedCurrency, extractedNights });
+        console.log('📦 Données extraites:', { extractedDates, extractedAdults, extractedCurrency, extractedNights, extractedChildren });
         
-        // ✅ 2. APPLIQUER LES DONNÉES EXTRAITES (AVANT L'APPEL API)
+        // 2. APPLIQUER LES DONNÉES EXTRAITES
         if (extractedDates && extractedDates.checkin && extractedDates.checkout) {
             currentSearchParams.checkin = extractedDates.checkin;
             currentSearchParams.checkout = extractedDates.checkout;
@@ -679,10 +740,10 @@ async function callEngine(query) {
             console.log('✅ Nuits APPLIQUÉES:', extractedNights);
         }
         
-        // ✅ 3. SAUVEGARDER LES PARAMÈTRES
+        // 3. SAUVEGARDER LES PARAMÈTRES
         saveSearchParams();
         
-        // ✅ 4. APPELER L'API AVEC LES BONS PARAMÈTRES
+        // 4. APPELER L'API
         var r = await fetch(STAYO_ENGINE_URL + '/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -699,8 +760,7 @@ async function callEngine(query) {
         var el = document.getElementById(loadingId);
         if (el) el.remove();
 
-        // ✅ 5. NE PAS ÉCRASER LES DONNÉES EXTRAITES PAR LE CONTEXTE
-        // On utilise le contexte UNIQUEMENT pour les champs non extraits
+        // 5. UTILISER LE CONTEXTE UNIQUEMENT POUR LES CHAMPS NON EXTRAITS
         if (data.context) {
             if (!extractedDates && data.context.checkin) {
                 currentSearchParams.checkin = data.context.checkin;
@@ -715,15 +775,20 @@ async function callEngine(query) {
             ratesCache.clear();
         }
 
-        // ✅ 6. RECALCUL FINAL
+        // 6. RECALCUL FINAL
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         var adults = currentSearchParams.adults || 2;
+        var children = extractedChildren || (data.context && data.context.children ? parseInt(data.context.children, 10) : 0);
         
         var participants = adults + ' adulte' + (adults > 1 ? 's' : '');
+        if (children > 0) {
+            participants += ' et ' + children + ' enfant' + (children > 1 ? 's' : '');
+        }
+        
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
         
         console.log('📊 TripInfo FINAL:', tripInfo);
-        console.log('📊 Nights:', nights, 'Adults:', adults);
+        console.log('📊 Nights:', nights, 'Adults:', adults, 'Children:', children);
 
         var hotelsToShow = data.recommendations || data.hotels || [];
 
@@ -782,7 +847,9 @@ async function callEngine(query) {
     saveSearchToHistory(query);
 }
 
-// ========== CHATBOT ==========
+// ==========================
+// CHATBOT
+// ==========================
 var aiChatContainer = document.getElementById('aiChatContainer');
 var aiUserInput = document.getElementById('aiUserInput');
 var aiSendBtn = document.getElementById('aiSendBtn');
@@ -811,32 +878,7 @@ if (aiSearchInput) {
         }
     });
 }
-function extractAdultsFromQuery(query) {
-    if (!query) return null;
-    
-    // "04 adultes", "4 adultes", "4 personnes", "4 pers"
-    var match = query.match(/(\d+)\s*(adulte|adultes|pers|personnes|voyageurs?|adult)/i);
-    if (match) {
-        var num = parseInt(match[1], 10);
-        if (num > 0 && num < 20) return num;
-    }
-    
-    // "pour 4 personnes"
-    var match2 = query.match(/pour\s+(\d+)\s+(personnes?|pers)/i);
-    if (match2) {
-        var num = parseInt(match2[1], 10);
-        if (num > 0 && num < 20) return num;
-    }
-    
-    // "4 pax"
-    var match3 = query.match(/(\d+)\s*pax/i);
-    if (match3) {
-        var num = parseInt(match3[1], 10);
-        if (num > 0 && num < 20) return num;
-    }
-    
-    return null;
-}
+
 function sendQuickReply(t) {
     appendMessage('user', t);
     callEngine(t);
@@ -872,29 +914,9 @@ function focusHotel(id, lat, lng) {
     var h = allHotelsData.find(function(h) { return h.id === id; });
     if (h) openHotelSidebar(h);
 }
-function saveSearchParams() {
-    var params = {
-        checkin: currentSearchParams.checkin,
-        checkout: currentSearchParams.checkout,
-        adults: currentSearchParams.adults,
-        currency: currentSearchParams.currency
-    };
-    localStorage.setItem('stayo_search_params', JSON.stringify(params));
-}
 
-function loadSearchParams() {
-    var saved = localStorage.getItem('stayo_search_params');
-    if (saved) {
-        try {
-            var params = JSON.parse(saved);
-            if (params.checkin) currentSearchParams.checkin = params.checkin;
-            if (params.checkout) currentSearchParams.checkout = params.checkout;
-            if (params.adults) currentSearchParams.adults = params.adults;
-            if (params.currency) currentSearchParams.currency = params.currency;
-        } catch(e) {}
-    }
-}
-
-// Charger les paramètres au démarrage
+// ==========================
+// INITIALISATION
+// ==========================
 loadSearchParams();
 setTimeout(loadHotelsForViewport, 500);
