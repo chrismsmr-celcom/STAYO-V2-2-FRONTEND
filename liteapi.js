@@ -102,9 +102,6 @@ async function fetchHotelDetails(id) {
     } catch (e) { return null; }
 }
 
-// ============================================================
-// ✅ FONCTION CORRIGÉE - h remplacé par hd
-// ============================================================
 async function openHotelSidebar(hd) {
     if (!hd) {
         console.error('openHotelSidebar: hd est undefined');
@@ -167,7 +164,6 @@ async function openHotelSidebar(hd) {
     var totalPrice = hd.price || null;
     var pricePerNight = totalPrice ? Math.round(totalPrice / nights) : null;
 
-    // ✅ CORRECTION : hd.price au lieu de h.price
     var priceDisplay = 'Prix non disponible';
     if (hd.price) {
         priceDisplay = hd.price + ' ' + cu;
@@ -488,7 +484,99 @@ function _hasDateInQuery(query) {
     return false;
 }
 
+// ✅ Fonction améliorée pour extraire le nombre d'adultes depuis la requête
+function extractAdultsFromQuery(query) {
+    if (!query) return null;
+    var match = query.match(/(\d+)\s*(adulte|adultes|pers|personnes|voyageurs?|adult)/i);
+    if (match) return parseInt(match[1], 10);
+    
+    // Cherche aussi "pour X personnes"
+    var match2 = query.match(/pour\s+(\d+)\s+(personnes?|pers)/i);
+    if (match2) return parseInt(match2[1], 10);
+    
+    return null;
+}
+
+// ✅ Fonction améliorée pour extraire la devise depuis la requête
+function extractCurrencyFromQuery(query) {
+    if (!query) return null;
+    if (/euros?|eur/i.test(query)) return 'EUR';
+    if (/dollars?|usd/i.test(query)) return 'USD';
+    if (/livres?|gbp/i.test(query)) return 'GBP';
+    return null;
+}
+
+// ✅ Fonction pour normaliser les dates extraites de la requête
+function extractDatesFromQuery(query) {
+    if (!query) return null;
+    
+    // Essaie de trouver "du 14 juillet au 25 juillet 2026" ou similaire
+    var match = query.match(/du\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})?/i);
+    if (match) {
+        var monthMap = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
+            'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        };
+        var day1 = parseInt(match[1]);
+        var month1 = monthMap[match[2].toLowerCase()];
+        var year1 = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+        var day2 = parseInt(match[4]);
+        var month2 = monthMap[match[5].toLowerCase()];
+        var year2 = match[6] ? parseInt(match[6]) : new Date().getFullYear();
+        
+        // Si l'année n'est pas spécifiée et que le mois est passé, on prend l'année suivante
+        var now = new Date();
+        if (!match[3] && (month1 < now.getMonth() + 1 || (month1 === now.getMonth() + 1 && day1 < now.getDate()))) {
+            year1 = now.getFullYear() + 1;
+        }
+        if (!match[6] && (month2 < now.getMonth() + 1 || (month2 === now.getMonth() + 1 && day2 < now.getDate()))) {
+            year2 = now.getFullYear() + 1;
+        }
+        
+        var checkin = new Date(year1, month1 - 1, day1);
+        var checkout = new Date(year2, month2 - 1, day2);
+        
+        if (checkin < checkout && checkin >= now) {
+            return {
+                checkin: checkin.toISOString().split('T')[0],
+                checkout: checkout.toISOString().split('T')[0]
+            };
+        }
+    }
+    
+    // Autre format: "14/07 au 25/07/2026"
+    var match2 = query.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s+au\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+    if (match2) {
+        var now = new Date();
+        var y1 = match2[3] ? parseInt(match2[3]) : now.getFullYear();
+        var y2 = match2[6] ? parseInt(match2[6]) : now.getFullYear();
+        var checkin = new Date(y1, parseInt(match2[2]) - 1, parseInt(match2[1]));
+        var checkout = new Date(y2, parseInt(match2[5]) - 1, parseInt(match2[4]));
+        if (checkin < checkout && checkin >= now) {
+            return {
+                checkin: checkin.toISOString().split('T')[0],
+                checkout: checkout.toISOString().split('T')[0]
+            };
+        }
+    }
+    
+    return null;
+}
+
+// ✅ Fonction pour extraire le nombre de nuits depuis la requête
+function extractNightsFromQuery(query) {
+    if (!query) return null;
+    var match = query.match(/(\d+)\s*(nuit|nuits)/i);
+    if (match) return parseInt(match[1], 10);
+    return null;
+}
+
 async function callEngine(query) {
+    console.log('🔍 callEngine - Début');
+    console.log('Adults avant:', currentSearchParams.adults);
+    console.log('Checkin:', currentSearchParams.checkin);
+    console.log('Checkout:', currentSearchParams.checkout);
+
     if (!query) return;
     var aiSendBtn = document.getElementById('aiSendBtn');
     if (aiSendBtn) aiSendBtn.disabled = true;
@@ -511,25 +599,69 @@ async function callEngine(query) {
         if (el) el.remove();
 
         var hasUserDates = _hasDateInQuery(query);
+        var extractedDates = extractDatesFromQuery(query);
+        var extractedAdults = extractAdultsFromQuery(query);
+        var extractedCurrency = extractCurrencyFromQuery(query);
+        var extractedNights = extractNightsFromQuery(query);
 
+        // ✅ Mise à jour des paramètres depuis le contexte OU depuis l'extraction
         if (data.context) {
-            if (data.context.checkin && !hasUserDates) currentSearchParams.checkin = data.context.checkin;
-            if (data.context.checkout && !hasUserDates) currentSearchParams.checkout = data.context.checkout;
-            if (data.context.adults) currentSearchParams.adults = data.context.adults;
-            if (data.context.currency) currentSearchParams.currency = data.context.currency;
+            // Dates : priorité à l'extraction directe
+            if (extractedDates && extractedDates.checkin && extractedDates.checkout) {
+                currentSearchParams.checkin = extractedDates.checkin;
+                currentSearchParams.checkout = extractedDates.checkout;
+                console.log('✅ Dates extraites de la requête:', extractedDates);
+            } else if (data.context.checkin && !hasUserDates) {
+                currentSearchParams.checkin = data.context.checkin;
+                if (data.context.checkout && !hasUserDates) {
+                    currentSearchParams.checkout = data.context.checkout;
+                }
+            }
+            
+            // Adultes : priorité à l'extraction directe
+            if (extractedAdults) {
+                currentSearchParams.adults = extractedAdults;
+                console.log('✅ Adultes extraits de la requête:', extractedAdults);
+            } else if (data.context.adults) {
+                currentSearchParams.adults = data.context.adults;
+                console.log('✅ Adultes du contexte:', data.context.adults);
+            }
+            
+            // Devise : priorité à l'extraction directe
+            if (extractedCurrency) {
+                currentSearchParams.currency = extractedCurrency;
+                console.log('✅ Devise extraite de la requête:', extractedCurrency);
+            } else if (data.context.currency) {
+                currentSearchParams.currency = data.context.currency;
+            }
+            
+            // Si on a extrait des nuits, on recalcule checkout
+            if (extractedNights) {
+                var newCheckout = new Date(currentSearchParams.checkin);
+                newCheckout.setDate(newCheckout.getDate() + extractedNights);
+                currentSearchParams.checkout = newCheckout.toISOString().split('T')[0];
+                console.log('✅ Nuits extraites de la requête:', extractedNights);
+            }
+            
             ratesCache.clear();
         }
 
+        // ✅ Recalcul des valeurs pour l'affichage
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         var adults = currentSearchParams.adults || 2;
         var children = (data.context && data.context.children) ? parseInt(data.context.children, 10) : 0;
         
+        // ✅ Construction du header dynamique
         var participants = adults + ' adulte' + (adults > 1 ? 's' : '');
         if (children > 0) {
             participants += ' et ' + children + ' enfant' + (children > 1 ? 's' : '');
         }
         
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
+        
+        // ✅ Log de vérification
+        console.log('📊 TripInfo final:', tripInfo);
+        console.log('📊 Nights:', nights, 'Adults:', adults);
 
         var hotelsToShow = data.recommendations || data.hotels || [];
 
@@ -577,6 +709,7 @@ async function callEngine(query) {
             appendMessage('bot', data.message || "Aucun hotel trouve. Essayez de modifier vos dates ou votre budget.");
         }
     } catch (e) {
+        console.error('❌ Erreur callEngine:', e);
         var el = document.getElementById(loadingId);
         if (el) el.remove();
         appendMessage('bot', "Le serveur se reveille (hebergement gratuit). Reessayez dans 30 secondes.");
