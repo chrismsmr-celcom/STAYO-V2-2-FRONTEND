@@ -510,54 +510,115 @@ function extractCurrencyFromQuery(query) {
 function extractDatesFromQuery(query) {
     if (!query) return null;
     
-    // Essaie de trouver "du 14 juillet au 25 juillet 2026" ou similaire
-    var match = query.match(/du\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})?/i);
+    var now = new Date();
+    var currentYear = now.getFullYear();
+    
+    // ✅ FORMAT 1: "du 14 juillet au 25 juillet 2026"
+    var match = query.match(/du\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
     if (match) {
         var monthMap = {
-            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
-            'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+            'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+            'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
         };
+        
         var day1 = parseInt(match[1]);
         var month1 = monthMap[match[2].toLowerCase()];
-        var year1 = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+        var year1 = match[3] ? parseInt(match[3]) : currentYear;
+        
         var day2 = parseInt(match[4]);
         var month2 = monthMap[match[5].toLowerCase()];
-        var year2 = match[6] ? parseInt(match[6]) : new Date().getFullYear();
+        var year2 = match[6] ? parseInt(match[6]) : currentYear;
         
-        // Si l'année n'est pas spécifiée et que le mois est passé, on prend l'année suivante
-        var now = new Date();
-        if (!match[3] && (month1 < now.getMonth() + 1 || (month1 === now.getMonth() + 1 && day1 < now.getDate()))) {
-            year1 = now.getFullYear() + 1;
-        }
-        if (!match[6] && (month2 < now.getMonth() + 1 || (month2 === now.getMonth() + 1 && day2 < now.getDate()))) {
-            year2 = now.getFullYear() + 1;
-        }
+        var date1 = new Date(year1, month1, day1);
+        var date2 = new Date(year2, month2, day2);
         
-        var checkin = new Date(year1, month1 - 1, day1);
-        var checkout = new Date(year2, month2 - 1, day2);
+        // ✅ Si la date est passée, on prend l'année suivante
+        if (date1 < now) date1.setFullYear(date1.getFullYear() + 1);
+        if (date2 < now) date2.setFullYear(date2.getFullYear() + 1);
+        if (date1 >= date2) date2.setFullYear(date2.getFullYear() + 1);
         
-        if (checkin < checkout && checkin >= now) {
-            return {
-                checkin: checkin.toISOString().split('T')[0],
-                checkout: checkout.toISOString().split('T')[0]
-            };
-        }
+        return {
+            checkin: date1.toISOString().split('T')[0],
+            checkout: date2.toISOString().split('T')[0]
+        };
     }
     
-    // Autre format: "14/07 au 25/07/2026"
-    var match2 = query.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s+au\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+    // ✅ FORMAT 2: "14 juillet au 25 juillet 2026" (sans "du")
+    var match2 = query.match(/(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?\s+au\s+(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
     if (match2) {
-        var now = new Date();
-        var y1 = match2[3] ? parseInt(match2[3]) : now.getFullYear();
-        var y2 = match2[6] ? parseInt(match2[6]) : now.getFullYear();
-        var checkin = new Date(y1, parseInt(match2[2]) - 1, parseInt(match2[1]));
-        var checkout = new Date(y2, parseInt(match2[5]) - 1, parseInt(match2[4]));
-        if (checkin < checkout && checkin >= now) {
-            return {
-                checkin: checkin.toISOString().split('T')[0],
-                checkout: checkout.toISOString().split('T')[0]
-            };
-        }
+        var monthMap = {
+            'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+            'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+        };
+        
+        var day1 = parseInt(match2[1]);
+        var month1 = monthMap[match2[2].toLowerCase()];
+        var year1 = match2[3] ? parseInt(match2[3]) : currentYear;
+        
+        var day2 = parseInt(match2[4]);
+        var month2 = monthMap[match2[5].toLowerCase()];
+        var year2 = match2[6] ? parseInt(match2[6]) : currentYear;
+        
+        var date1 = new Date(year1, month1, day1);
+        var date2 = new Date(year2, month2, day2);
+        
+        if (date1 < now) date1.setFullYear(date1.getFullYear() + 1);
+        if (date2 < now) date2.setFullYear(date2.getFullYear() + 1);
+        if (date1 >= date2) date2.setFullYear(date2.getFullYear() + 1);
+        
+        return {
+            checkin: date1.toISOString().split('T')[0],
+            checkout: date2.toISOString().split('T')[0]
+        };
+    }
+    
+    // ✅ FORMAT 3: "14/07/2026 au 25/07/2026"
+    var match3 = query.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s+au\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+    if (match3) {
+        var day1 = parseInt(match3[1]);
+        var month1 = parseInt(match3[2]) - 1;
+        var year1 = match3[3] ? parseInt(match3[3]) : currentYear;
+        
+        var day2 = parseInt(match3[4]);
+        var month2 = parseInt(match3[5]) - 1;
+        var year2 = match3[6] ? parseInt(match3[6]) : currentYear;
+        
+        var date1 = new Date(year1, month1, day1);
+        var date2 = new Date(year2, month2, day2);
+        
+        if (date1 < now) date1.setFullYear(date1.getFullYear() + 1);
+        if (date2 < now) date2.setFullYear(date2.getFullYear() + 1);
+        if (date1 >= date2) date2.setFullYear(date2.getFullYear() + 1);
+        
+        return {
+            checkin: date1.toISOString().split('T')[0],
+            checkout: date2.toISOString().split('T')[0]
+        };
+    }
+    
+    // ✅ FORMAT 4: "14-25 juillet 2026"
+    var match4 = query.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s*(?:,?\s*(\d{4}))?/i);
+    if (match4) {
+        var monthMap = {
+            'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+            'juillet': 6, 'août': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11
+        };
+        
+        var day1 = parseInt(match4[1]);
+        var day2 = parseInt(match4[2]);
+        var month = monthMap[match4[3].toLowerCase()];
+        var year = match4[4] ? parseInt(match4[4]) : currentYear;
+        
+        var date1 = new Date(year, month, day1);
+        var date2 = new Date(year, month, day2);
+        
+        if (date1 < now) { date1.setFullYear(date1.getFullYear() + 1); date2.setFullYear(date2.getFullYear() + 1); }
+        if (date1 >= date2) date2.setFullYear(date2.getFullYear() + 1);
+        
+        return {
+            checkin: date1.toISOString().split('T')[0],
+            checkout: date2.toISOString().split('T')[0]
+        };
     }
     
     return null;
@@ -573,15 +634,55 @@ function extractNightsFromQuery(query) {
 
 async function callEngine(query) {
     console.log('🔍 callEngine - Début');
-    console.log('Adults avant:', currentSearchParams.adults);
-    console.log('Checkin:', currentSearchParams.checkin);
-    console.log('Checkout:', currentSearchParams.checkout);
-
+    console.log('📝 Query:', query);
+    console.log('📊 Paramètres AVANT:', {
+        checkin: currentSearchParams.checkin,
+        checkout: currentSearchParams.checkout,
+        adults: currentSearchParams.adults
+    });
+    
     if (!query) return;
     var aiSendBtn = document.getElementById('aiSendBtn');
     if (aiSendBtn) aiSendBtn.disabled = true;
     var loadingId = appendMessage('bot', '<div class="spinner" style="width:20px;height:20px;margin:10px;"></div>');
+    
     try {
+        // ✅ 1. EXTRAIRE LES DONNÉES DE LA REQUÊTE (AVANT L'APPEL API)
+        var extractedDates = extractDatesFromQuery(query);
+        var extractedAdults = extractAdultsFromQuery(query);
+        var extractedCurrency = extractCurrencyFromQuery(query);
+        var extractedNights = extractNightsFromQuery(query);
+        
+        console.log('📦 Données extraites:', { extractedDates, extractedAdults, extractedCurrency, extractedNights });
+        
+        // ✅ 2. APPLIQUER LES DONNÉES EXTRAITES (AVANT L'APPEL API)
+        if (extractedDates && extractedDates.checkin && extractedDates.checkout) {
+            currentSearchParams.checkin = extractedDates.checkin;
+            currentSearchParams.checkout = extractedDates.checkout;
+            console.log('✅ Dates APPLIQUÉES:', currentSearchParams.checkin, '->', currentSearchParams.checkout);
+        }
+        
+        if (extractedAdults) {
+            currentSearchParams.adults = extractedAdults;
+            console.log('✅ Adultes APPLIQUÉS:', currentSearchParams.adults);
+        }
+        
+        if (extractedCurrency) {
+            currentSearchParams.currency = extractedCurrency;
+            console.log('✅ Devise APPLIQUÉE:', currentSearchParams.currency);
+        }
+        
+        if (extractedNights && currentSearchParams.checkin) {
+            var newCheckout = new Date(currentSearchParams.checkin);
+            newCheckout.setDate(newCheckout.getDate() + extractedNights);
+            currentSearchParams.checkout = newCheckout.toISOString().split('T')[0];
+            console.log('✅ Nuits APPLIQUÉES:', extractedNights);
+        }
+        
+        // ✅ 3. SAUVEGARDER LES PARAMÈTRES
+        saveSearchParams();
+        
+        // ✅ 4. APPELER L'API AVEC LES BONS PARAMÈTRES
         var r = await fetch(STAYO_ENGINE_URL + '/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -598,69 +699,30 @@ async function callEngine(query) {
         var el = document.getElementById(loadingId);
         if (el) el.remove();
 
-        var hasUserDates = _hasDateInQuery(query);
-        var extractedDates = extractDatesFromQuery(query);
-        var extractedAdults = extractAdultsFromQuery(query);
-        var extractedCurrency = extractCurrencyFromQuery(query);
-        var extractedNights = extractNightsFromQuery(query);
-
-        // ✅ Mise à jour des paramètres depuis le contexte OU depuis l'extraction
+        // ✅ 5. NE PAS ÉCRASER LES DONNÉES EXTRAITES PAR LE CONTEXTE
+        // On utilise le contexte UNIQUEMENT pour les champs non extraits
         if (data.context) {
-            // Dates : priorité à l'extraction directe
-            if (extractedDates && extractedDates.checkin && extractedDates.checkout) {
-                currentSearchParams.checkin = extractedDates.checkin;
-                currentSearchParams.checkout = extractedDates.checkout;
-                console.log('✅ Dates extraites de la requête:', extractedDates);
-            } else if (data.context.checkin && !hasUserDates) {
+            if (!extractedDates && data.context.checkin) {
                 currentSearchParams.checkin = data.context.checkin;
-                if (data.context.checkout && !hasUserDates) {
-                    currentSearchParams.checkout = data.context.checkout;
-                }
+                if (data.context.checkout) currentSearchParams.checkout = data.context.checkout;
             }
-            
-            // Adultes : priorité à l'extraction directe
-            if (extractedAdults) {
-                currentSearchParams.adults = extractedAdults;
-                console.log('✅ Adultes extraits de la requête:', extractedAdults);
-            } else if (data.context.adults) {
+            if (!extractedAdults && data.context.adults) {
                 currentSearchParams.adults = data.context.adults;
-                console.log('✅ Adultes du contexte:', data.context.adults);
             }
-            
-            // Devise : priorité à l'extraction directe
-            if (extractedCurrency) {
-                currentSearchParams.currency = extractedCurrency;
-                console.log('✅ Devise extraite de la requête:', extractedCurrency);
-            } else if (data.context.currency) {
+            if (!extractedCurrency && data.context.currency) {
                 currentSearchParams.currency = data.context.currency;
             }
-            
-            // Si on a extrait des nuits, on recalcule checkout
-            if (extractedNights) {
-                var newCheckout = new Date(currentSearchParams.checkin);
-                newCheckout.setDate(newCheckout.getDate() + extractedNights);
-                currentSearchParams.checkout = newCheckout.toISOString().split('T')[0];
-                console.log('✅ Nuits extraites de la requête:', extractedNights);
-            }
-            
             ratesCache.clear();
         }
 
-        // ✅ Recalcul des valeurs pour l'affichage
+        // ✅ 6. RECALCUL FINAL
         var nights = Math.max(1, Math.round((new Date(currentSearchParams.checkout) - new Date(currentSearchParams.checkin)) / 86400000));
         var adults = currentSearchParams.adults || 2;
-        var children = (data.context && data.context.children) ? parseInt(data.context.children, 10) : 0;
         
-        // ✅ Construction du header dynamique
         var participants = adults + ' adulte' + (adults > 1 ? 's' : '');
-        if (children > 0) {
-            participants += ' et ' + children + ' enfant' + (children > 1 ? 's' : '');
-        }
-        
         var tripInfo = nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + participants + ' · ' + currentSearchParams.currency;
         
-        // ✅ Log de vérification
-        console.log('📊 TripInfo final:', tripInfo);
+        console.log('📊 TripInfo FINAL:', tripInfo);
         console.log('📊 Nights:', nights, 'Adults:', adults);
 
         var hotelsToShow = data.recommendations || data.hotels || [];
@@ -676,6 +738,7 @@ async function callEngine(query) {
 
                 var priceDisplay = '?';
                 if (h.price) {
+                    var hasUserDates = _hasDateInQuery(query);
                     if (hasUserDates) {
                         priceDisplay = h.price + ' ' + currentSearchParams.currency;
                     } else {
@@ -748,7 +811,32 @@ if (aiSearchInput) {
         }
     });
 }
-
+function extractAdultsFromQuery(query) {
+    if (!query) return null;
+    
+    // "04 adultes", "4 adultes", "4 personnes", "4 pers"
+    var match = query.match(/(\d+)\s*(adulte|adultes|pers|personnes|voyageurs?|adult)/i);
+    if (match) {
+        var num = parseInt(match[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    
+    // "pour 4 personnes"
+    var match2 = query.match(/pour\s+(\d+)\s+(personnes?|pers)/i);
+    if (match2) {
+        var num = parseInt(match2[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    
+    // "4 pax"
+    var match3 = query.match(/(\d+)\s*pax/i);
+    if (match3) {
+        var num = parseInt(match3[1], 10);
+        if (num > 0 && num < 20) return num;
+    }
+    
+    return null;
+}
 function sendQuickReply(t) {
     appendMessage('user', t);
     callEngine(t);
@@ -784,5 +872,29 @@ function focusHotel(id, lat, lng) {
     var h = allHotelsData.find(function(h) { return h.id === id; });
     if (h) openHotelSidebar(h);
 }
+function saveSearchParams() {
+    var params = {
+        checkin: currentSearchParams.checkin,
+        checkout: currentSearchParams.checkout,
+        adults: currentSearchParams.adults,
+        currency: currentSearchParams.currency
+    };
+    localStorage.setItem('stayo_search_params', JSON.stringify(params));
+}
 
+function loadSearchParams() {
+    var saved = localStorage.getItem('stayo_search_params');
+    if (saved) {
+        try {
+            var params = JSON.parse(saved);
+            if (params.checkin) currentSearchParams.checkin = params.checkin;
+            if (params.checkout) currentSearchParams.checkout = params.checkout;
+            if (params.adults) currentSearchParams.adults = params.adults;
+            if (params.currency) currentSearchParams.currency = params.currency;
+        } catch(e) {}
+    }
+}
+
+// Charger les paramètres au démarrage
+loadSearchParams();
 setTimeout(loadHotelsForViewport, 500);
